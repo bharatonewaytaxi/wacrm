@@ -7,6 +7,9 @@ import { verifyMetaWebhookSignature } from '@/lib/whatsapp/webhook-signature'
 import { runAutomationsForTrigger } from '@/lib/automations/engine'
 import { dispatchInboundToFlows } from '@/lib/flows/engine'
 
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 // Lazy-initialized to avoid build-time crash when env vars are missing
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let _adminClient: any = null
@@ -92,7 +95,10 @@ export async function GET(request: Request) {
     if (envVerifyToken && verifyToken === envVerifyToken) {
       return new Response(challenge, {
         status: 200,
-        headers: { 'Content-Type': 'text/plain' },
+        headers: {
+          'Content-Type': 'text/plain',
+          'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+        },
       })
     }
 
@@ -146,7 +152,10 @@ export async function GET(request: Request) {
       // Return challenge as plain text
       return new Response(challenge, {
         status: 200,
-        headers: { 'Content-Type': 'text/plain' },
+        headers: {
+          'Content-Type': 'text/plain',
+          'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+        },
       })
     }
 
