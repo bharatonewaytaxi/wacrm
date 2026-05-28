@@ -690,7 +690,7 @@ async function processMessage(
   // listens to only one trigger runs only when that trigger matches.
   if (contactOutcome.wasCreated) automationTriggers.unshift('new_contact_created')
   if (isFirstInboundMessage) automationTriggers.unshift('first_inbound_message')
-  for (const triggerType of automationTriggers) {
+  const automationDispatches = automationTriggers.map((triggerType) =>
     runAutomationsForTrigger({
       userId,
       triggerType,
@@ -699,7 +699,13 @@ async function processMessage(
         message_text: inboundText,
         conversation_id: conversation.id,
       },
-    }).catch((err) => console.error('[automations] dispatch failed:', err))
+    }),
+  )
+  const automationResults = await Promise.allSettled(automationDispatches)
+  for (const result of automationResults) {
+    if (result.status === 'rejected') {
+      console.error('[automations] dispatch failed:', result.reason)
+    }
   }
 }
 
