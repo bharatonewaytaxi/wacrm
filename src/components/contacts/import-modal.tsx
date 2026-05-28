@@ -27,40 +27,99 @@ interface ParsedRow {
   company?: string;
 }
 
+const HEADER_ALIASES: Record<keyof ParsedRow, string[]> = {
+  phone: [
+    'phone',
+    'phone_number',
+    'phonenumber',
+    'phone no',
+    'phone_no',
+    'mobile',
+    'mobile_number',
+    'mobilenumber',
+    'whatsapp',
+    'whatsapp_number',
+    'whatsappnumber',
+    'contact',
+    'contact_number',
+  ],
+  name: ['name', 'full_name', 'fullname', 'full name', 'contact_name'],
+  email: ['email', 'email_address', 'email address'],
+  company: ['company', 'company_name', 'organization', 'organisation'],
+};
+
+function normalizeHeader(value: string): string {
+  return value
+    .replace(/^\uFEFF/, '')
+    .replace(/["']/g, '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ');
+}
+
+function splitCsvLine(line: string, delimiter: string): string[] {
+  const values: string[] = [];
+  let current = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    const next = line[i + 1];
+    if (char === '"') {
+      if (inQuotes && next === '"') {
+        current += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (char === delimiter && !inQuotes) {
+      values.push(current.trim());
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+
+  values.push(current.trim());
+  return values;
+}
+
+function detectDelimiter(headerLine: string): string {
+  const candidates = [',', ';', '\t'];
+  return candidates
+    .map((delimiter) => ({
+      delimiter,
+      count: splitCsvLine(headerLine, delimiter).length,
+    }))
+    .sort((a, b) => b.count - a.count)[0]?.delimiter ?? ',';
+}
+
+function findHeaderIndex(headers: string[], field: keyof ParsedRow): number {
+  const aliases = HEADER_ALIASES[field];
+  return headers.findIndex((header) => aliases.includes(header));
+}
+
 function parseCSV(text: string): ParsedRow[] {
   const lines = text.trim().split(/\r?\n/);
   if (lines.length < 2) return [];
 
   const headerLine = lines[0];
-  const headers = headerLine.split(',').map((h) => h.trim().toLowerCase().replace(/["']/g, ''));
+  const delimiter = detectDelimiter(headerLine);
+  const headers = splitCsvLine(headerLine, delimiter).map(normalizeHeader);
 
-  const phoneIdx = headers.indexOf('phone');
+  const phoneIdx = findHeaderIndex(headers, 'phone');
   if (phoneIdx === -1) return [];
 
-  const nameIdx = headers.indexOf('name');
-  const emailIdx = headers.indexOf('email');
-  const companyIdx = headers.indexOf('company');
+  const nameIdx = findHeaderIndex(headers, 'name');
+  const emailIdx = findHeaderIndex(headers, 'email');
+  const companyIdx = findHeaderIndex(headers, 'company');
 
   const rows: ParsedRow[] = [];
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i].trim();
     if (!line) continue;
 
-    // Simple CSV parse (handles quoted fields)
-    const values: string[] = [];
-    let current = '';
-    let inQuotes = false;
-    for (const char of line) {
-      if (char === '"') {
-        inQuotes = !inQuotes;
-      } else if (char === ',' && !inQuotes) {
-        values.push(current.trim());
-        current = '';
-      } else {
-        current += char;
-      }
-    }
-    values.push(current.trim());
+    const values = splitCsvLine(line, delimiter);
 
     const phone = values[phoneIdx]?.replace(/["']/g, '').trim();
     if (!phone) continue;
@@ -187,8 +246,8 @@ export function ImportModal({ open, onOpenChange, onImported }: ImportModalProps
         <DialogHeader>
           <DialogTitle className="text-white">Import Contacts</DialogTitle>
           <DialogDescription className="text-slate-400">
-            Upload a CSV file with a &quot;phone&quot; column (required). Optional columns:
-            name, email, company.
+            Upload a CSV file with a phone column (phone, mobile, or WhatsApp
+            number). Optional columns: name, email, company.
           </DialogDescription>
         </DialogHeader>
 
@@ -213,7 +272,7 @@ export function ImportModal({ open, onOpenChange, onImported }: ImportModalProps
                   Click to upload CSV file
                 </p>
                 <p className="text-xs text-slate-500">
-                  CSV with &quot;phone&quot; column required
+                  CSV with phone/mobile/WhatsApp column required
                 </p>
               </>
             )}
