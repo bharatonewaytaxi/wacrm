@@ -88,6 +88,14 @@ export async function GET(request: Request) {
       )
     }
 
+    const envVerifyToken = process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN
+    if (envVerifyToken && verifyToken === envVerifyToken) {
+      return new Response(challenge, {
+        status: 200,
+        headers: { 'Content-Type': 'text/plain' },
+      })
+    }
+
     // Fetch all whatsapp configs to check verify tokens
     const { data: configs, error: configError } = await supabaseAdmin()
       .from('whatsapp_config')
