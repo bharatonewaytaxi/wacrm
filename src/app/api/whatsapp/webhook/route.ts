@@ -194,10 +194,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
   }
 
-  // Process asynchronously so we can ack Meta within their timeout.
-  processWebhook(body).catch((error) => {
+  // Await processing in serverless hosts. Fire-and-forget work can be
+  // frozen after the response is sent, which drops inbound messages
+  // before they are inserted into Supabase.
+  try {
+    await processWebhook(body)
+  } catch (error) {
     console.error('Error processing webhook:', error)
-  })
+    return NextResponse.json(
+      { error: 'Failed to process webhook' },
+      { status: 500 }
+    )
+  }
 
   return NextResponse.json({ status: 'received' }, { status: 200 })
 }
